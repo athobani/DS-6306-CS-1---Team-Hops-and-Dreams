@@ -3,8 +3,8 @@ title: "Project 1"
 author: "Sabrina"
 date: "2/19/2020"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
   word_document: default
 ---
 
@@ -70,8 +70,8 @@ names(beerbrew)[names(beerbrew) == "Name.y"] <- "Brewery Name"
 
 ```{r}
 #print top 6 & bottom 6
-head(beerbrew, n=6)
-tail(beerbrew, n=6)
+print(data.table(head(beerbrew, n=6)))
+print(data.table(tail(beerbrew, n=6)))
 ```
 
 ```{r}
@@ -105,9 +105,9 @@ plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "
 ```{r}
 #finding state with max ABV and IBU 
 which.max(beerbrew$ABV)
-beerbrew[2279,]
+print(data.table(beerbrew[2279,]))
 which.max(beerbrew$IBU)
-beerbrew[148,]
+print(data.table(beerbrew[148,]))
 #confirming the max results
 summary(beerbrew$ABV)
 summary(beerbrew$IBU)
