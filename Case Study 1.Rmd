@@ -1,0 +1,111 @@
+---
+title: "Project 1"
+author: "Sabrina"
+date: "2/19/2020"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#loading libraries
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(stringr)
+```
+
+
+```{r}
+#Reading in the data
+breweries <- read.csv(file.choose(),header=TRUE)
+beer <- read.csv(file.choose(),header=TRUE)
+```
+
+```{r}
+#count of breweries by state
+#CONSIDER - adding Group By Statement
+breweries %>% count(State)
+```
+
+```{r}
+#assessing merge
+head(beer)
+head(breweries)
+str(beer)
+str(breweries)
+
+#merge by Brewery ID key
+#Note:  All three join sequences produce the same dataset - using first one
+beerbrew <- left_join(beer, breweries, by = c("Brewery_id" = "Brew_ID"))
+str(beerbrew)
+beerbrew <- left_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+str(beerbrew)
+beerbrew <- full_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+str(beerbrew)
+```
+
+```{r}
+#print top 6 & bottom 6
+head(beerbrew, n=6)
+tail(beerbrew, n=6)
+```
+
+```{r}
+#missing values - INCOMPLETE
+is.na(beerbrew$Name)
+summary(beerbrew)
+str(beerbrew)
+
+
+```
+
+```{r}
+#barplot of alcohol content and international bitterness by state
+#finding median values
+beerbrew %>% group_by(State) %>% summarize(median(ABV, na.rm=TRUE))
+medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),MedianIBU=as.numeric(median(IBU, na.rm=TRUE))),by=State]
+
+ggplot(data=medians, mapping = aes(x=State, y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none")
+ggplot(data=medians, mapping = aes(x=State, y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none")
+```
+
+```{r}
+#finding state with max ABV and IBU 
+which.max(beerbrew$ABV)
+beerbrew[2279,]
+which.max(beerbrew$IBU)
+beerbrew[148,]
+#confirming the max results
+summary(beerbrew$ABV)
+summary(beerbrew$IBU)
+```
+
+```{r}
+#summary statistics of ABV
+summary(beerbrew$ABV)
+```
+
+```{R}
+#Scatterplot of ABV and Internationl bitterness to assess correlation
+ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(color = State)) + geom_smooth()
+```
+
+```{r}
+#Running KNN for IPA vs all other 'Ale's
+#create groupings of the dataset
+
+#first filter to only include Ale
+beerbrewdf <- dplyr::filter(beerbrew, grepl("Ale",Style))
+beerbrewdf$Style <- as.character(beerbrewdf$Style)
+str(beerbrewdf)
+
+#group IPA separately from the rest of the Ales
+##INCOMPLETE
+beerbrewdf %>% !gsub("IPA", beerbrewdf$Style, perl=FALSE)
