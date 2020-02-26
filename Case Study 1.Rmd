@@ -19,6 +19,10 @@ library(tidyverse)
 library(ggplot2)
 library(data.table)
 library(stringr)
+library(usmap)
+library(class)
+library(caret)
+library(e1071)
 ```
 
 
@@ -31,7 +35,11 @@ beer <- read.csv(file.choose(),header=TRUE)
 ```{r}
 #count of breweries by state
 #CONSIDER - adding Group By Statement
-breweries %>% count(State)
+breweries1 <- breweries %>% count(State)
+
+#graphing counts
+breweries1$fips <- fips(trimws(as.character(breweries1$State)))
+plot_usmap(data=breweries1, values = "n", color = "black") + labs(title = "Breweries by State") + scale_fill_continuous(low = "white", high = "Navy", name = "count", label = scales::comma)
 ```
 
 ```{r}
@@ -74,14 +82,22 @@ medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),M
 
 ggplot(data=medians, mapping = aes(x=State, y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none")
 ggplot(data=medians, mapping = aes(x=State, y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none")
+
+#graphing on maps - IBU
+medians$fips <- fips(trimws(as.character(medians$State)))
+
+plot_usmap(data=medians, values = "MedianIBU", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianIBU", label = scales::comma)
+
+#graphing on maps - ABV
+plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianABV")
 ```
 
 ```{r}
 #finding state with max ABV and IBU 
 which.max(beerbrew$ABV)
-beerbrew[2279,]
+beerbrew[375,]
 which.max(beerbrew$IBU)
-beerbrew[148,]
+beerbrew[1857,]
 #confirming the max results
 summary(beerbrew$ABV)
 summary(beerbrew$IBU)
@@ -90,22 +106,111 @@ summary(beerbrew$IBU)
 ```{r}
 #summary statistics of ABV
 summary(beerbrew$ABV)
+ggplot(data = beerbrew) + geom_histogram(binwidth = .005, mapping = aes(x=ABV, fill="ABV"))+labs(title = "Histogram of ABV")
+
 ```
 
 ```{R}
 #Scatterplot of ABV and Internationl bitterness to assess correlation
-ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(color = State)) + geom_smooth()
+ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(color = State)) + geom_smooth(method=lm) + labs(title = "ABV vs IBU")
 ```
 
 ```{r}
 #Running KNN for IPA vs all other 'Ale's
 #create groupings of the dataset
 
-#first filter to only include Ale
-beerbrewdf <- dplyr::filter(beerbrew, grepl("Ale",Style))
-beerbrewdf$Style <- as.character(beerbrewdf$Style)
-str(beerbrewdf)
-
 #group IPA separately from the rest of the Ales
-##INCOMPLETE
-beerbrewdf %>% !gsub("IPA", beerbrewdf$Style, perl=FALSE)
+
+beerbrew$type[grepl("IPA", beerbrew$Style, fixed = FALSE)] <- "IPA"
+beerbrew$type[is.na(beerbrew$type) & grepl("Ale", beerbrew$Style)] <- "Other Ales"
+beerbrew$type[is.na(beerbrew$type)] <- "Non Ales"
+
+beerbrew1 <- beerbrew %>% filter(type == "IPA" | type == "Other Ales")
+```
+
+```{r}
+#removing NA values
+beerbrew1$type = as.factor(beerbrew1$type)
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$ABV))
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$IBU))
+summary(beerbrew1$type)
+```
+
+
+```{r}
+#creating KNN - 70/30 split
+set.seed(4)
+iterations = 100
+numks = 70
+splitPerc = .7
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+  train = beerbrew1[trainIndices,]
+  test = beerbrew1[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(7,8)],test[,c(7,8)],train$type, prob = TRUE, k = i)
+    table(classifications,test$type)
+    CM = confusionMatrix(table(classifications,test$type))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+CM
+```
+
+```{r}
+#Using K=5
+set.seed(4)
+trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+train = beerbrew1[trainIndices,]
+test = beerbrew1[-trainIndices,]
+classifying <- knn(train[,c(7,8)],test[,c(7,8)],train$type, prob = TRUE, k = 5)  
+CM = confusionMatrix(table(classifying,test$type))
+```
+
+```{r}
+#testing findings with Naive Bayes
+#INCOMPLETE
+iterations = 100
+
+masterAcc = matrix(nrow = iterations)
+
+splitPerc = .7 #Training / Test split Percentage
+
+for(j in 1:iterations)
+{
+  
+  trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+  train = beerbrew1[trainIndices,]
+  test = beerbrew1[-trainIndices,]
+  
+  model = naiveBayes(train[,c(7,8)],(train$type))
+  table(predict(model,test[,c(7,8)]),(test$type))
+  CM = confusionMatrix(table(predict(model,test[,c(1,2)]),(test$type)))
+  masterAcc[j] = CM$overall[1]
+}
+
+MeanAcc = colMeans(masterAcc)
+
+MeanAcc
+CM
+```
+
+```{r}
+#final insights
+#correlations?  ABV to IBU
+cor.test(beerbrew1$ABV, beerbrew1$IBU)
+
