@@ -5,5 +5,5 @@
 
 The purpose of this project is to successfully merge multiple datasets and provide insights to key stakeholders based on our findings.
 
-We will employ exploratory data analysis, data visualization, and K Nearnest Neighbor (KNN) to glean information that will be valuable in driving business decisions
+We will employ exploratory data analysis, data visualization, and K Nearest Neighbor (KNN) to glean information that will be valuable in driving business decisions
 
