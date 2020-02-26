@@ -39,6 +39,9 @@ breweries1 <- breweries %>% count(State)
 
 #graphing counts
 breweries1$fips <- fips(trimws(as.character(breweries1$State)))
+#top 10 table
+breweries1 %>% arrange(desc(n)) %>% slice(1:10)
+#plotting the data
 plot_usmap(data=breweries1, values = "n", color = "black") + labs(title = "Breweries by State") + scale_fill_continuous(low = "white", high = "Navy", name = "count", label = scales::comma)
 ```
 
@@ -53,10 +56,16 @@ str(breweries)
 #Note:  All three join sequences produce the same dataset - using first one
 beerbrew <- left_join(beer, breweries, by = c("Brewery_id" = "Brew_ID"))
 str(beerbrew)
-beerbrew <- left_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
-str(beerbrew)
-beerbrew <- full_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
-str(beerbrew)
+#beerbrew <- left_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+#beerbrew <- full_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+```
+
+```{r}
+#rename Name column headers
+names(beerbrew)[names(beerbrew) == "Name.x"] <- "Beer Name"
+names(beerbrew)[names(beerbrew) == "Name.y"] <- "Brewery Name"
 ```
 
 ```{r}
@@ -80,6 +89,7 @@ str(beerbrew)
 beerbrew %>% group_by(State) %>% summarize(median(ABV, na.rm=TRUE))
 medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),MedianIBU=as.numeric(median(IBU, na.rm=TRUE))),by=State]
 
+#barplots of median data
 ggplot(data=medians, mapping = aes(x=State, y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none")
 ggplot(data=medians, mapping = aes(x=State, y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none")
 
@@ -89,15 +99,15 @@ medians$fips <- fips(trimws(as.character(medians$State)))
 plot_usmap(data=medians, values = "MedianIBU", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianIBU", label = scales::comma)
 
 #graphing on maps - ABV
-plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianABV")
+plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "ABV by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianABV")
 ```
 
 ```{r}
 #finding state with max ABV and IBU 
 which.max(beerbrew$ABV)
-beerbrew[375,]
+beerbrew[2279,]
 which.max(beerbrew$IBU)
-beerbrew[1857,]
+beerbrew[148,]
 #confirming the max results
 summary(beerbrew$ABV)
 summary(beerbrew$IBU)
@@ -120,11 +130,11 @@ ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(co
 #create groupings of the dataset
 
 #group IPA separately from the rest of the Ales
-
 beerbrew$type[grepl("IPA", beerbrew$Style, fixed = FALSE)] <- "IPA"
 beerbrew$type[is.na(beerbrew$type) & grepl("Ale", beerbrew$Style)] <- "Other Ales"
 beerbrew$type[is.na(beerbrew$type)] <- "Non Ales"
 
+#filter dataset down to exclude Non Ales
 beerbrew1 <- beerbrew %>% filter(type == "IPA" | type == "Other Ales")
 ```
 
@@ -153,7 +163,7 @@ for(j in 1:iterations)
   test = beerbrew1[-trainIndices,]
   for(i in 1:numks)
   {
-    classifications = knn(train[,c(7,8)],test[,c(7,8)],train$type, prob = TRUE, k = i)
+    classifications = knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = i)
     table(classifications,test$type)
     CM = confusionMatrix(table(classifications,test$type))
     masterAcc[j,i] = CM$overall[1]
@@ -177,7 +187,7 @@ set.seed(4)
 trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
 train = beerbrew1[trainIndices,]
 test = beerbrew1[-trainIndices,]
-classifying <- knn(train[,c(7,8)],test[,c(7,8)],train$type, prob = TRUE, k = 5)  
+classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 5)  
 CM = confusionMatrix(table(classifying,test$type))
 ```
 
@@ -197,8 +207,8 @@ for(j in 1:iterations)
   train = beerbrew1[trainIndices,]
   test = beerbrew1[-trainIndices,]
   
-  model = naiveBayes(train[,c(7,8)],(train$type))
-  table(predict(model,test[,c(7,8)]),(test$type))
+  model = naiveBayes(train[,c(3,4)],(train$type))
+  table(predict(model,test[,c(3,4)]),(test$type))
   CM = confusionMatrix(table(predict(model,test[,c(1,2)]),(test$type)))
   masterAcc[j] = CM$overall[1]
 }
