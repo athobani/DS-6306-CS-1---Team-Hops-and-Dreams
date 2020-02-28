@@ -33,6 +33,11 @@ beer <- read.csv(file.choose(),header=TRUE)
 ```
 
 ```{r}
+#clearing duplicates in beer data.  Keeping unique based on everything except Beer ID and Ounces to truly get one beer per observation
+beer <- distinct(beer, Name, Brewery_id,ABV,IBU,Style, .keep_all=TRUE)
+```
+
+```{r}
 #count of breweries by state
 #CONSIDER - adding Group By Statement
 breweries1 <- breweries %>% count(State)
@@ -104,10 +109,8 @@ plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "
 
 ```{r}
 #finding state with max ABV and IBU 
-which.max(beerbrew$ABV)
-print(data.table(beerbrew[2279,]))
-which.max(beerbrew$IBU)
-print(data.table(beerbrew[148,]))
+print(data.table(beerbrew[(which.max(beerbrew$ABV)),]))
+print(data.table(beerbrew[(which.max(beerbrew$IBU)),]))
 #confirming the max results
 summary(beerbrew$ABV)
 summary(beerbrew$IBU)
@@ -189,7 +192,72 @@ train = beerbrew1[trainIndices,]
 test = beerbrew1[-trainIndices,]
 classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 5)  
 CM = confusionMatrix(table(classifying,test$type))
+CM
 ```
+
+```{r}
+#testing with all three categories of type
+#can use beerbrew dataset instead of beerbrew1
+#removing NA values
+beerbrew$type = as.factor(beerbrew$type)
+beerbrew <- beerbrew %>% filter(!is.na(beerbrew$ABV))
+beerbrew <- beerbrew %>% filter(!is.na(beerbrew$IBU))
+summary(beerbrew$type)
+```
+
+
+```{r}
+#creating KNN - 70/30 split
+set.seed(4)
+iterations = 100
+numks = 70
+splitPerc = .7
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(beerbrew)[1],round(splitPerc * dim(beerbrew)[1]))
+  train = beerbrew[trainIndices,]
+  test = beerbrew[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = i)
+    table(classifications,test$type)
+    CM = confusionMatrix(table(classifications,test$type))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+CM
+```
+
+```{r}
+#Using K=32
+set.seed(4)
+trainIndices = sample(1:dim(beerbrew)[1],round(splitPerc * dim(beerbrew)[1]))
+train = beerbrew[trainIndices,]
+test = beerbrew[-trainIndices,]
+classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 32)  
+CM = confusionMatrix(table(classifying,test$type))
+CM
+```
+
+```{r}
+#final insights
+#correlations?  ABV to IBU
+cor.test(beerbrew1$ABV, beerbrew1$IBU)
+cor.test(beerbrew$ABV, beerbrew$IBU)
+```
+
 
 ```{r}
 #testing findings with Naive Bayes
@@ -218,9 +286,4 @@ MeanAcc = colMeans(masterAcc)
 MeanAcc
 CM
 ```
-
-```{r}
-#final insights
-#correlations?  ABV to IBU
-cor.test(beerbrew1$ABV, beerbrew1$IBU)
 
