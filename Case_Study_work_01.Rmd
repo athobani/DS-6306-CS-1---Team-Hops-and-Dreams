@@ -9,10 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Finding Breweries count by State
-
-#Data clean and heat map for Breweries Data 
-#Data has been read into a Dataframe called "BrewData"
+#Load necessary packages
 
 library(tidyverse)
 library(ggplot2)
@@ -20,7 +17,8 @@ library(maps)
 library(dplyr)
 library(mapproj)
 library(naniar)
-
+library(doBy)
+library(reshape2)
 
 #Read Data into Variables
 BrewData <- read.csv(file.choose(),header = TRUE)
@@ -53,6 +51,20 @@ BrewData$State <- trimws(BrewData$State)
 ## 1. How many breweries are present in each state?
 ####################################################
 
+#We count breweries by State and arrange them
+BrewStateCount = count(BrewData, State)
+colnames(BrewStateCount)[2]="Brewery_Count"
+
+BrewStateCount <- arrange(BrewStateCount,Brewery_Count)
+
+head(BrewStateCount)
+
+#Generate a bar plot flipping the coordiantes for easier analysis
+B_Count_Plot <- ggplot(BrewStateCount, aes(x=reorder(State, Brewery_Count), y=Brewery_Count)) + geom_bar(stat='identity',fill = "#2ECC40") +coord_flip() + labs(title ="Breweries by State", x = "State", y = "Number of Breweries") + theme(legend.position="none")
+
+ggsave(B_Count_Plot, filename="c:/temp/B_Count_Plot.png")
+
+#We also generate a heat map to visualize the spread of breweries by State geographically.
 #make a data frame with State name and abbreviation(abb). 
 lookup = data.frame(abb = state.abb, State = state.name) 
 
@@ -64,7 +76,7 @@ head(lookup)
 colnames(BrewData)[4]="abb"
 
 #Select only the column data that is needed for the Analysis and store in a data frame
-Brew=BrewData %>% select(Brewery_Name,abb) %>% group_by(abb)
+Brew= BrewData %>% select(Name,State) %>% group_by(State) 
 #Breweries %>% select (Name,State) %>% group_by(State) %>% summarize(count=n())
 
 # Merge the Brewery dataset with lookup map data
@@ -87,12 +99,13 @@ map.df <- merge(states,BrewMapData2, by="region", all.x=T)
 map.df <- map.df[order(map.df$order),]
 
 #Plot the dataset to visualize the heatmap of Breweries count by State.
-ggplot(map.df, aes(x=long,y=lat,group=group))+
+BCS_Plot <- ggplot(map.df, aes(x=long,y=lat,group=group))+
   geom_polygon(aes(fill=Breweries_Count))+
   geom_path()+ 
-  scale_fill_gradientn(colours=rev(heat.colors(10)),na.value="grey10")+ggtitle("Breweries Count by State")+
+  scale_fill_gradientn(colours=rev(heat.colors(10)),na.value="grey10")+labs(title="Breweries Count by State",x="Longitude",y="Latitude")+
 coord_map()
 
+ggsave(BCS_Plot,filename="c:/temp/BCS_Plot.png")
 
 #########################################################################################
 # 2. Merge beer data with the breweries data. 
@@ -110,6 +123,8 @@ colnames(BeerMerge1)[10]="State"
 #Print the first 6 rows and last 6 rows of Merged data
 head(BeerMerge1)
 tail(BeerMerge1)
+
+
 
 
 ############################################
@@ -145,7 +160,9 @@ MedAlco=BeerMerge_Cleanup %>% group_by(State) %>% summarize(Median_Alcohol_Conte
 
 MedAlco$State = factor(MedAlco$State,level=MedAlco$State[order(MedAlco$Median_Alcohol_Content)])
 
-MedAlco %>% ggplot(aes(x=State,y=Median_Alcohol_Content)) + geom_bar (stat="identity") +ggtitle("Beer - Median Alcohol Content by State")
+MedAlco_Plot <- MedAlco %>% ggplot(aes(x=State,y=Median_Alcohol_Content)) + geom_bar (stat="identity",fill="NavyBlue") +ggtitle("Beer - Median Alcohol Content by State")
+
+ggsave(MedAlco_Plot,filename="c:/temp/MedAlco_Plot.png")
 
 
 # B. Finding the Median bitterness 
@@ -154,7 +171,10 @@ MedBitter=BeerMerge_Cleanup %>% group_by(State) %>% summarize(Median_Bitter_Cont
 
 MedBitter$State = factor(MedBitter$State,level=MedBitter$State[order(MedBitter$Median_Bitter_Content)])
 
-MedBitter %>% ggplot(aes(x=State,y=Median_Bitter_Content)) + geom_bar (stat="identity") +ggtitle("Beer - Median Bitter Content by State")
+Med_Bitter_Plot <- MedBitter %>% ggplot(aes(x=State,y=Median_Bitter_Content)) + geom_bar (stat="identity",fill="Red") +ggtitle("Beer - Median Bitter Content by State")
+
+
+ggsave(Med_Bitter_Plot,filename="c:/temp/Med_Bitter_Plot.png")
 
 
 ## The results from the above Median values for Alcohol Content and Bitterness were also arranged by state and plotted for the study.ABV has less variance than IBU variable.
@@ -193,8 +213,12 @@ BeerSummary <- (summary(BeerMerge_Cleanup$ABV))
 
 
 
-#The scatterplot below provides visual evidence for a weak positive linear relationship between the alcohol content and the IBU values (R-Squared 0.44), meaning that 44% of the variation in the IBU of craft beers is explained by the Alcohol By Volume variable. This means that there are numerous other factors that may affect the IBU but are not accounted for in this linear regression.A simple way to define this relationship is that for every one percent increase in the ABV value, there is an increase of 12.2 units in the IBU average (pvalue < 0.001).
+#The scatterplot below provides visual evidence for a weak positive linear relationship between the alcohol content and the IBU values (R-Squared 0.64), meaning that 64% of the variation in the IBU of craft beers is explained by the Alcohol By Volume variable. This means that there are numerous other factors that may affect the IBU but are not accounted for in this linear regression.A simple way to define this relationship is that for every one percent increase in the ABV value, there is an increase of 12.2 units in the IBU average (pvalue < 0.001).
 #There is a caveat to keep in mind for this regression analysis that 40% of the IBU data is missing. This could be strongly influencing the regression coefficients since currently there is no way of knowing exactly where that 40% falls within the overall spectrum of IBU values for all craft beers in the US. 
 
-ggplot(BeerMerge_Cleanup,aes(x=ABV,y=IBU,colour=IBU)) + geom_point(shape=1) + geom_smooth(method=lm) + xlab("Alcohol by volume(ABV)") + ylab("Bitterness(IBU)") + ggtitle("Beer - Bitternes vs Alcohol Content") + scale_colour_gradientn(colours = rainbow(10))
+ABV_IBU_Plot <- ggplot(BeerMerge_Cleanup,aes(x=ABV,y=IBU,colour=IBU)) + geom_point(shape=1) + geom_smooth(method=lm) + xlab("Alcohol by volume(ABV)") + ylab("Bitterness(IBU)") + ggtitle("Beer - Bitternes vs Alcohol Content") + scale_colour_gradientn(colours = rainbow(10))
+
+ggsave(ABV_IBU_Plot,filename="c:/temp/ABV_IBU_Plot.png")
+
+
 
