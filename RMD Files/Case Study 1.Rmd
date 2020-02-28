@@ -1,0 +1,226 @@
+---
+title: "Project 1"
+author: "Sabrina"
+date: "2/19/2020"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#loading libraries
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(usmap)
+library(class)
+library(caret)
+library(e1071)
+```
+
+
+```{r}
+#Reading in the data
+breweries <- read.csv(file.choose(),header=TRUE)
+beer <- read.csv(file.choose(),header=TRUE)
+```
+
+```{r}
+#count of breweries by state
+#CONSIDER - adding Group By Statement
+breweries1 <- breweries %>% count(State)
+
+#graphing counts
+breweries1$fips <- fips(trimws(as.character(breweries1$State)))
+#top 10 table
+breweries1 %>% arrange(desc(n)) %>% slice(1:10)
+#plotting the data
+plot_usmap(data=breweries1, values = "n", color = "black") + labs(title = "Breweries by State") + scale_fill_continuous(low = "white", high = "Navy", name = "count", label = scales::comma)
+```
+
+```{r}
+#assessing merge
+head(beer)
+head(breweries)
+str(beer)
+str(breweries)
+
+#merge by Brewery ID key
+#Note:  All three join sequences produce the same dataset - using first one
+beerbrew <- left_join(beer, breweries, by = c("Brewery_id" = "Brew_ID"))
+str(beerbrew)
+#beerbrew <- left_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+#beerbrew <- full_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+```
+
+```{r}
+#rename Name column headers
+names(beerbrew)[names(beerbrew) == "Name.x"] <- "Beer Name"
+names(beerbrew)[names(beerbrew) == "Name.y"] <- "Brewery Name"
+```
+
+```{r}
+#print top 6 & bottom 6
+print(data.table(head(beerbrew, n=6)))
+print(data.table(tail(beerbrew, n=6)))
+```
+
+```{r}
+#missing values - INCOMPLETE
+is.na(beerbrew$Name)
+summary(beerbrew)
+str(beerbrew)
+
+
+```
+
+```{r}
+#barplot of alcohol content and international bitterness by state
+#finding median values
+beerbrew %>% group_by(State) %>% summarize(median(ABV, na.rm=TRUE))
+medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),MedianIBU=as.numeric(median(IBU, na.rm=TRUE))),by=State]
+
+#barplots of median data
+ggplot(data=medians, mapping = aes(x=State, y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none")
+ggplot(data=medians, mapping = aes(x=State, y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none")
+
+#graphing on maps - IBU
+medians$fips <- fips(trimws(as.character(medians$State)))
+
+plot_usmap(data=medians, values = "MedianIBU", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianIBU", label = scales::comma)
+
+#graphing on maps - ABV
+plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "ABV by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianABV")
+```
+
+```{r}
+#finding state with max ABV and IBU 
+which.max(beerbrew$ABV)
+print(data.table(beerbrew[2279,]))
+which.max(beerbrew$IBU)
+print(data.table(beerbrew[148,]))
+#confirming the max results
+summary(beerbrew$ABV)
+summary(beerbrew$IBU)
+```
+
+```{r}
+#summary statistics of ABV
+summary(beerbrew$ABV)
+ggplot(data = beerbrew) + geom_histogram(binwidth = .005, mapping = aes(x=ABV, fill="ABV"))+labs(title = "Histogram of ABV")
+
+```
+
+```{R}
+#Scatterplot of ABV and Internationl bitterness to assess correlation
+ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(color = State)) + geom_smooth(method=lm) + labs(title = "ABV vs IBU")
+```
+
+```{r}
+#Running KNN for IPA vs all other 'Ale's
+#create groupings of the dataset
+
+#group IPA separately from the rest of the Ales
+beerbrew$type[grepl("IPA", beerbrew$Style, fixed = FALSE)] <- "IPA"
+beerbrew$type[is.na(beerbrew$type) & grepl("Ale", beerbrew$Style)] <- "Other Ales"
+beerbrew$type[is.na(beerbrew$type)] <- "Non Ales"
+
+#filter dataset down to exclude Non Ales
+beerbrew1 <- beerbrew %>% filter(type == "IPA" | type == "Other Ales")
+```
+
+```{r}
+#removing NA values
+beerbrew1$type = as.factor(beerbrew1$type)
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$ABV))
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$IBU))
+summary(beerbrew1$type)
+```
+
+
+```{r}
+#creating KNN - 70/30 split
+set.seed(4)
+iterations = 100
+numks = 70
+splitPerc = .7
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+  train = beerbrew1[trainIndices,]
+  test = beerbrew1[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = i)
+    table(classifications,test$type)
+    CM = confusionMatrix(table(classifications,test$type))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+CM
+```
+
+```{r}
+#Using K=5
+set.seed(4)
+trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+train = beerbrew1[trainIndices,]
+test = beerbrew1[-trainIndices,]
+classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 5)  
+CM = confusionMatrix(table(classifying,test$type))
+```
+
+```{r}
+#testing findings with Naive Bayes
+#INCOMPLETE
+iterations = 100
+
+masterAcc = matrix(nrow = iterations)
+
+splitPerc = .7 #Training / Test split Percentage
+
+for(j in 1:iterations)
+{
+  
+  trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+  train = beerbrew1[trainIndices,]
+  test = beerbrew1[-trainIndices,]
+  
+  model = naiveBayes(train[,c(3,4)],(train$type))
+  table(predict(model,test[,c(3,4)]),(test$type))
+  CM = confusionMatrix(table(predict(model,test[,c(1,2)]),(test$type)))
+  masterAcc[j] = CM$overall[1]
+}
+
+MeanAcc = colMeans(masterAcc)
+
+MeanAcc
+CM
+```
+
+```{r}
+#final insights
+#correlations?  ABV to IBU
+cor.test(beerbrew1$ABV, beerbrew1$IBU)
+
