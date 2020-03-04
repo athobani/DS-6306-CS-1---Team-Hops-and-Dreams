@@ -1,0 +1,340 @@
+---
+title: "Project 1"
+author: "Sabrina"
+date: "2/19/2020"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#loading libraries
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(usmap)
+library(class)
+library(caret)
+library(e1071)
+```
+
+
+```{r}
+#Reading in the data
+breweries <- read.csv(file.choose(),header=TRUE)
+beer <- read.csv(file.choose(),header=TRUE)
+```
+
+```{r}
+
+############################################
+# 3. Address missing values in each column
+############################################
+
+#clearing duplicates in beer data.  Keeping unique based on everything except Beer ID and Ounces to truly get one beer per observation
+beer <- distinct(beer, Name, Brewery_id,ABV,IBU,Style, .keep_all=TRUE)
+```
+
+```{r}
+# Questions that we find the answers for 
+####################################################
+## 1. How many breweries are present in each state?
+####################################################
+#Colorado has the most breweries at 48, followed by CA, MI, OR, TX, PA, MA, WA, IN and WI
+
+#count of breweries by state
+breweries1 <- breweries %>% count(State)
+
+#graphing counts
+breweries1$fips <- fips(trimws(as.character(breweries1$State)))
+#top 10 table
+breweries1 %>% arrange(desc(n)) %>% slice(1:10)
+#plotting the data
+plot_usmap(data=breweries1, values = "n", color = "black") + labs(title = "Breweries by State") + scale_fill_continuous(low = "white", high = "Navy", name = "count", label = scales::comma)
+```
+
+```{r}
+#########################################################################################
+# 2. Merge beer data with the breweries data. 
+# Print the first 6 observations and the last six observations to check the merged file
+##########################################################################################
+
+
+#assessing merge
+head(beer)
+head(breweries)
+str(beer)
+str(breweries)
+
+#merge by Brewery ID key
+#Note:  All three join sequences produce the same dataset - using first one
+beerbrew <- left_join(beer, breweries, by = c("Brewery_id" = "Brew_ID"))
+str(beerbrew)
+#beerbrew <- left_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+#beerbrew <- full_join(breweries, beer, by = c("Brew_ID" = "Brewery_id"))
+#str(beerbrew)
+```
+
+```{r}
+#rename Name column headers
+names(beerbrew)[names(beerbrew) == "Name.x"] <- "Beer Name"
+names(beerbrew)[names(beerbrew) == "Name.y"] <- "Brewery Name"
+```
+
+```{r}
+#print top 6 & bottom 6
+print(data.table(head(beerbrew, n=6)))
+print(data.table(tail(beerbrew, n=6)))
+```
+
+```{r}
+
+############################################
+# 3. Address missing values in each column
+############################################
+#missing values
+is.na(beerbrew$Name)
+summary(beerbrew)
+str(beerbrew)
+# There's missing values found on IBU and ABV columns of Beer data with 1005 missing values on IBU and 62 on ABV. This is a very high number which is approx half of the data. The total number of rows after the merge is 2410.
+```
+
+```{r}
+###################################################################################################
+# 4. Compute the median alcohol content(ABV) and international bitterness unit(IBU) for each state. 
+# Plot a bar chart to compare
+###################################################################################################
+
+## The results from the Median values for Alcohol Content and Bitterness were also arranged by state and plotted for the study.  ABV has less variance than IBU variable.
+
+#barplot of alcohol content and international bitterness by state
+#finding median values
+beerbrew %>% group_by(State) %>% summarize(median(ABV, na.rm=TRUE))
+medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),MedianIBU=as.numeric(median(IBU, na.rm=TRUE))),by=State]
+
+#barplots of median data
+ggplot(data=medians, mapping = aes(x=reorder(State, MedianIBU), y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none") + xlab("State") + ylab("Median IBU")
+ggplot(data=medians, mapping = aes(x=reorder(State, MedianABV), y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none") + xlab("State") + ylab("Median ABV")
+
+#graphing on maps - IBU
+medians$fips <- fips(trimws(as.character(medians$State)))
+
+plot_usmap(data=medians, values = "MedianIBU", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianIBU", label = scales::comma)
+
+#graphing on maps - ABV
+plot_usmap(data=medians, values = "MedianABV", color = "black") + labs(title = "ABV by State") + scale_fill_continuous(low = "white", high = "navy", name = "MedianABV")
+```
+
+```{r}
+###################################################################################################
+# 5. Which state has the maximum alcoholic (ABV) beer? Which state has the most bitter (IBU) beer? 
+###################################################################################################
+
+#finding state with max ABV and IBU 
+#Colorado has the highest ABV at 12.8 and Oregon has highest IBU at 138
+
+print(data.table(beerbrew[(which.max(beerbrew$ABV)),]))
+print(data.table(beerbrew[(which.max(beerbrew$IBU)),]))
+#confirming the max results
+summary(beerbrew$ABV)
+summary(beerbrew$IBU)
+```
+
+```{r}
+###########################################################################
+# 6. Comment on the Summary statistics and distribution of ABV variable
+###########################################################################
+
+#From the summary statistics, it can be inferred that the ABV of our craft beers dataset follows a normal distribution because the median and the mean values are very close. There is a slight right skew to the data. Also from the Median  One thing to note is that 75% of all the beers have a 5% ABV or more. However, the interquartile distance is only 1.8% suggesting that 50% of the data is bounded between 5% and 6.8% ABV. It is also important to remember that missing values are not included in the summary statistics, and there's a possibility that this representation may not be accurate.
+
+#summary statistics of ABV
+summary(beerbrew$ABV)
+ggplot(data = beerbrew) + geom_histogram(binwidth = .005, mapping = aes(x=ABV, fill="ABV"))+labs(title = "Histogram of ABV")
+
+```
+
+```{R}
+
+######################################################################################
+#7. Is there an apparent relationship between the bitterness of the beer and its alcoholic content? Draw a scatter plot.  Make your best judgment of a relationship and EXPLAIN your answer.
+######################################################################################
+
+#The scatterplot provides visual evidence for a moderate positive linear relationship between the alcohol content and the IBU values (R-Squared 0.6655), meaning that 66.55% of the variation in the IBU of craft beers is explained by the Alcohol By Volume variable .
+
+#This means that there are numerous other factors that may affect the IBU but are not accounted for in this linear regression. A simple way to define this relationship is that for every 10 point increase in the IBU value, there is an increase of .34% units in the ABV value (pvalue < 0.001).
+
+#Also to keep in mind for this regression analysis that 40% of the IBU data is missing. This could be strongly influencing the regression coefficients.
+
+
+#Scatterplot of ABV and Internationl bitterness to assess correlation
+ggplot(data=beerbrew, mapping = aes(x=ABV, y=IBU)) + geom_point(mapping = aes(color = State)) + geom_smooth(method=lm) + labs(title = "ABV vs IBU")
+```
+
+```{r}
+######################################################################################
+#8. Budweiser would also like to investigate the difference with respect to IBU and ABV between IPAs (India Pale Ales) and other types of Ale (any beer with “Ale” in its name other than IPA).  You decide to use KNN classification to investigate this relationship.  Provide statistical evidence one way or the other. 
+######################################################################################
+
+#Relationally, IBU and ABV matter to each other when determining the type of beer you plan to produce (IPA vs standard Ales)
+#Analysis using KNN classification model provided 89% accuracy, it also suggest ~K=5 provides best Mean Accuracy 
+
+#Running KNN for IPA vs all other 'Ale's
+#create groupings of the dataset
+
+#group IPA separately from the rest of the Ales
+beerbrew$type[grepl("IPA", beerbrew$Style, fixed = FALSE)] <- "IPA"
+beerbrew$type[is.na(beerbrew$type) & grepl("Ale", beerbrew$Style)] <- "Other Ales"
+beerbrew$type[is.na(beerbrew$type)] <- "Non Ales"
+
+#filter dataset down to exclude Non Ales
+beerbrew1 <- beerbrew %>% filter(type == "IPA" | type == "Other Ales")
+```
+
+```{r}
+#removing NA values
+beerbrew1$type = as.factor(beerbrew1$type)
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$ABV))
+beerbrew1 <- beerbrew1 %>% filter(!is.na(beerbrew1$IBU))
+summary(beerbrew1$type)
+```
+
+
+```{r}
+#creating KNN - 70/30 split
+set.seed(4)
+iterations = 100
+numks = 70
+splitPerc = .7
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+  train = beerbrew1[trainIndices,]
+  test = beerbrew1[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = i)
+    table(classifications,test$type)
+    CM = confusionMatrix(table(classifications,test$type))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+CM
+```
+
+```{r}
+#Using K=5
+set.seed(4)
+trainIndices = sample(1:dim(beerbrew1)[1],round(splitPerc * dim(beerbrew1)[1]))
+train = beerbrew1[trainIndices,]
+test = beerbrew1[-trainIndices,]
+classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 5)  
+CM = confusionMatrix(table(classifying,test$type))
+CM
+```
+
+```{r}
+#testing with all three categories of type
+#can use beerbrew dataset instead of beerbrew1
+#removing NA values
+beerbrew$type = as.factor(beerbrew$type)
+beerbrew <- beerbrew %>% filter(!is.na(beerbrew$ABV))
+beerbrew <- beerbrew %>% filter(!is.na(beerbrew$IBU))
+summary(beerbrew$type)
+```
+
+
+```{r}
+#creating KNN - 70/30 split
+set.seed(4)
+iterations = 100
+numks = 70
+splitPerc = .7
+
+masterAcc = matrix(nrow = iterations, ncol = numks)
+
+for(j in 1:iterations)
+{
+  trainIndices = sample(1:dim(beerbrew)[1],round(splitPerc * dim(beerbrew)[1]))
+  train = beerbrew[trainIndices,]
+  test = beerbrew[-trainIndices,]
+  for(i in 1:numks)
+  {
+    classifications = knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = i)
+    table(classifications,test$type)
+    CM = confusionMatrix(table(classifications,test$type))
+    masterAcc[j,i] = CM$overall[1]
+  }
+  
+}
+
+MeanAcc = colMeans(masterAcc)
+
+plot(seq(1,numks,1),MeanAcc, type = "l")
+
+which.max(MeanAcc)
+max(MeanAcc)
+
+CM
+```
+
+```{r}
+#Using K=32
+set.seed(4)
+trainIndices = sample(1:dim(beerbrew)[1],round(splitPerc * dim(beerbrew)[1]))
+train = beerbrew[trainIndices,]
+test = beerbrew[-trainIndices,]
+classifying <- knn(train[,c(3,4)],test[,c(3,4)],train$type, prob = TRUE, k = 32)  
+CM = confusionMatrix(table(classifying,test$type))
+CM
+```
+
+```{r}
+######################################################################################
+#9. Knock their socks off!  Find one other useful inference from the data that you feel Budweiser may be able to find value in.  
+######################################################################################
+
+#The next brewery should be built in Washington.  It is the most populous state where Budweiser doesn't have a stake.  
+
+#final insights
+#correlations?  ABV to IBU
+cor.test(beerbrew1$ABV, beerbrew1$IBU)
+cor.test(beerbrew$ABV, beerbrew$IBU)
+```
+
+```{r}
+#Looking at Northwest Region
+medians$fips <- fips(trimws(as.character(medians$State)))
+
+#plotting breweries by State for NW
+plot_usmap(data=breweries1, include = c("WA", "OR", "ID", "MT", "WY", "ND", "SD", "NB"), labels = TRUE, values = "n", color = "black") + labs(title = "Breweries by State") + scale_fill_continuous(low = "white", high = "red", name = "count", label = scales::comma)
+
+#graphing IBU in Northwest
+plot_usmap(data=medians, include = c("WA", "OR", "ID", "MT", "WY", "ND", "SD", "NB"), labels = TRUE, values = "MedianIBU", color = "black") + labs(title = "IBU by State") + scale_fill_continuous(low = "white", high = "red", name = "MedianIBU", label = scales::comma)
+
+#graphing ABV in Northwest
+plot_usmap(data=medians, include = c("WA", "OR", "ID", "MT", "WY", "ND", "SD", "NB"), labels = TRUE, values = "MedianABV", color = "black") + labs(title = "ABV by State") + scale_fill_continuous(low = "white", high = "red", name = "MedianABV")
+
+#plotting populations
+plot_usmap(data = statepop, values = "pop_2015", include = c("WA", "OR", "ID", "MT", "WY", "ND", "SD", "NB"), labels = TRUE, color = "red"
+  ) + scale_fill_continuous(low = "white", high = "red", name = "Population (2015)", label = scales::comma) + labs(title = "Population Assessment", subtitle = "Where can we find the best consumer pool?") + theme(legend.position = "right")
+```

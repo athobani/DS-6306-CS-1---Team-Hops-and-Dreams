@@ -95,8 +95,8 @@ beerbrew %>% group_by(State) %>% summarize(median(ABV, na.rm=TRUE))
 medians <- setDT(beerbrew)[,list(MedianABV=as.numeric(median(ABV, na.rm=TRUE)),MedianIBU=as.numeric(median(IBU, na.rm=TRUE))),by=State]
 
 #barplots of median data
-ggplot(data=medians, mapping = aes(x=State, y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none")
-ggplot(data=medians, mapping = aes(x=State, y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none")
+ggplot(data=medians, mapping = aes(x=reorder(State, MedianIBU), y=MedianIBU, fill=State)) + geom_bar(stat = "identity") + ggtitle("IBU by State") + theme(legend.position = "none") + xlab("State") + ylab("Median IBU")
+ggplot(data=medians, mapping = aes(x=reorder(State, MedianABV), y=MedianABV, fill=State)) + geom_bar(stat = "identity") + ggtitle("ABV by State") + theme(legend.position = "none") + xlab("State") + ylab("Median ABV")
 
 #graphing on maps - IBU
 medians$fips <- fips(trimws(as.character(medians$State)))
