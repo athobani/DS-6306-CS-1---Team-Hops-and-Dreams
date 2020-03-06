@@ -16,3 +16,5 @@ R markdown File:  https://github.com/athobani/DS-6306-CS-1---Team-Hops-and-Dream
 Knit HTML file:  https://github.com/athobani/DS-6306-CS-1---Team-Hops-and-Dreams/blob/master/Case-Study-1.html
 
 Codebook:  https://github.com/athobani/DS-6306-CS-1---Team-Hops-and-Dreams/blob/master/Codebook/codebook_BeerMerge_Cleanup.html
+
+Data Sources:  https://github.com/athobani/DS-6306-CS-1---Team-Hops-and-Dreams/tree/master/Data%20Sources
